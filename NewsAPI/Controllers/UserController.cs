@@ -15,19 +15,31 @@ namespace NewsAPI.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<UserDto>>> GetUsers()
         {
-            return await _context.Users.Select(u => new UserDto
+            return await _context.Users.Include(u => u.Comments).Select(u => new UserDto
             {
                 Id = u.Id,
-                Username = u.Username
+                Username = u.Username,
+                Comments = u.Comments!.Select(c => new CommentDto
+                {
+                    Id = c.Id,
+                    Username = c.User.Username,
+                    Content = c.Content
+                }).ToList()
             }).ToListAsync();
         }
 
         [HttpGet("{id}")]
         public async Task<ActionResult<UserDto>> GetUser(Guid id)
         {
-            var user = await _context.Users.FindAsync(id);
+            var user = await _context.Users.Include(u => u.Comments).FirstOrDefaultAsync(u => u.Id == id);
 
-            return user == null ? (ActionResult<UserDto>)NotFound() : (ActionResult<UserDto>)new UserDto { Id = user.Id, Username = user.Username };
+            return user == null ? (ActionResult<UserDto>)NotFound() : (ActionResult<UserDto>)new UserDto { Id = user.Id, Username = user.Username, Comments = user.Comments!.Select(c => new CommentDto
+            {
+                Id = c.Id,
+                Username = c.User.Username,
+                Content = c.Content
+            }).ToList()
+            };
         }
 
         [HttpPost]

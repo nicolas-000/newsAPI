@@ -18,6 +18,8 @@ namespace NewsAPI.Controllers
             return await _context.Articles
                 .Include(a => a.ArticleTags)
                 .ThenInclude(at => at.Tag)
+                .Include(a => a.Comments)
+                .ThenInclude(c => c.User)
                 .Select(a => new ArticleDto
                 {
                     Id = a.Id,
@@ -28,6 +30,12 @@ namespace NewsAPI.Controllers
                     {
                         Id = at.Tag.Id,
                         Name = at.Tag.Name
+                    }).ToList(),
+                    Comments = a.Comments!.Select(c => new CommentDto
+                    {
+                        Id = c.Id,
+                        Username = c.User.Username,
+                        Content = c.Content,
                     }).ToList()
                 }).ToListAsync();
         }
@@ -35,7 +43,12 @@ namespace NewsAPI.Controllers
         [HttpGet("{articleId}")]
         public async Task<ActionResult<ArticleDto>> GetArticle(Guid articleId)
         {
-            var article = await _context.Articles.FindAsync(articleId);
+            var article = await _context.Articles
+                                    .Include(a => a.ArticleTags)
+                                    .ThenInclude(at => at.Tag)
+                                    .Include(a => a.Comments)
+                                    .ThenInclude(c => c.User)
+                                    .FirstOrDefaultAsync(a => a.Id == articleId);
 
             if (article == null)
             {
@@ -106,7 +119,7 @@ namespace NewsAPI.Controllers
                 return StatusCode(500, "An error occurred while saving the article.");
             }
 
-            return CreatedAtAction(nameof(GetArticle), new { id = article.Id }, new ArticleDto { Id = article.Id, Title = article.Title, Content = article.Content, CreatedAt = article.CreatedAt, Tags = tags });
+            return CreatedAtAction(nameof(GetArticle), new { articleId = article.Id }, new ArticleDto { Id = article.Id, Title = article.Title, Content = article.Content, CreatedAt = article.CreatedAt, Tags = tags });
         }
 
         [HttpPut("{articleId}")]
@@ -189,11 +202,7 @@ namespace NewsAPI.Controllers
                 return NotFound();
             }
 
-            var comments = await _context.Comments.Where(c => c.ArticleId == articleId).ToListAsync();
-
-            if (comments.Count == 0) {
-                return Content(string.Empty);
-            }
+            var comments = await _context.Comments.Include(c => c.User).Where(c => c.ArticleId == articleId).ToListAsync();
 
             return comments.ConvertAll(c => new CommentDto
             {
@@ -207,7 +216,7 @@ namespace NewsAPI.Controllers
         public async Task<ActionResult<CommentDto>> GetComment(Guid articleId, Guid id)
         {
             var article = await _context.Articles.FindAsync(articleId);
-            var comment = await _context.Comments.FindAsync(id);
+            var comment = await _context.Comments.Include(c => c.User).FirstOrDefaultAsync(c => c.Id == id);
             if (comment == null || article == null)
             {
                 return NotFound();
@@ -253,7 +262,7 @@ namespace NewsAPI.Controllers
         public async Task<IActionResult> PutComment(Guid articleId, Guid id, CreateCommentDto commentDto)
         {
             var article = await _context.Articles.FindAsync(articleId);
-            var comment = await _context.Comments.FindAsync(id);
+            var comment = await _context.Comments.Include(c => c.User).FirstOrDefaultAsync(c => c.Id == id);
             if (article == null || comment == null)
             {
                 return NotFound();
